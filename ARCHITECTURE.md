@@ -8,7 +8,7 @@ layout; treat the rules in `CLAUDE.md` as authoritative.
 ## Stack
 
 Next.js (App Router) frontend template with TypeScript:
-- **Next.js 14+ App Router** - React Server Components by default
+- **Next.js 15+ App Router** - React Server Components by default
 - **TanStack Query** - server state, caching, SSR prefetch + hydration
 - **Zustand** - client state
 - **Zod + React Hook Form** - validation and forms

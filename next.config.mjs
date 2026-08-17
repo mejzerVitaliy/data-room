@@ -9,8 +9,28 @@ const __dirname = path.dirname(__filename);
 // Import env here to validate during build. Using jiti we can import .ts files
 jiti('./src/env');
 
+const SECURITY_HEADERS = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The app never uses next/image, so the sharp-backed optimizer pipeline
+  // (and its libvips CVEs) has no legitimate caller — turn it off outright
+  // rather than leave an unused, vulnerable code path reachable.
+  images: {
+    unoptimized: true,
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: SECURITY_HEADERS,
+      },
+    ];
+  },
   webpack(config) {
     // Grab the existing rule that handles SVG imports
     const fileLoaderRule = config.module.rules.find(rule =>

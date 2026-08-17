@@ -1,3 +1,8 @@
 export enum QueryKeys {
-  GET_TODOS,
+  GET_ME,
+  GET_DATA_ROOMS,
+  GET_FOLDERS,
+  GET_FILES,
+  GET_SHARES,
+  GET_SHARED_ACCESS,
 }

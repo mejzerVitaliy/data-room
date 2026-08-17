@@ -1,484 +1,192 @@
-<div align="center">
- <img width="524" src="https://github.com/user-attachments/assets/73daa1c3-8cf0-4e02-adae-427b36a924a1" />
-</div>
+# Data Room — Frontend
 
+A virtual data room: a Google Drive/Dropbox-style document repository built for M&A due
+diligence workflows — nested folders, drag-and-drop uploads, inline file preview, and
+read-only sharing via public links or permissioned invites.
 
-## [Lumitech](https://lumitech.co/) Next.js Template ⚡
-The Lumitech Next.js Template provides a powerful and modern starting point for building fast, scalable, and maintainable web applications. With a clean architecture and pre-configured best practices, this template ensures that your development process is efficient and the project is production-ready.
+This is the **Next.js frontend**. It talks to a separate Fastify + PostgreSQL API
+([`data-room-api`](../data-room-api)) over REST; nothing here talks to a database directly.
 
-### About Lumitech
-[Lumitech](https://lumitech.co/) is a global custom software development company helping tech businesses build successful teams and innovative products. With a 600% growth since 2022, our team of engineers, AI/ML specialists, and product managers delivers high-quality software using the latest technologies.
+## Features
 
-### Why Use This Template? <br>
-This template is designed to accelerate and simplify development by providing modern technologies, a well-structured architecture, and ready-to-use examples:
+**Data rooms & folders**
+- Create data rooms; nest folders inside folders with breadcrumb navigation.
+- Rename, move, and delete, with a delete confirmation that previews exactly how many
+  folders/files and how many bytes will be removed before you commit.
 
-⚡ **Uses the latest and most modern technologies** – ```Zustand```, ```Tailwind```, ```TanStack Query```, ```Zod```, ```React Hook Form```, and more. <br>
-📂 **Clear folder architecture (FSD)** – no need to think about where to place files; everything is structured and ready to use. <br>
-📖 **Ready-to-use code examples** – quickly learn how to use key technologies with practical code snippets included in the template. <br>
-⚙️ **Typed env file** – prevents errors with strict validation of environment variables. <br>
-🖌️ **Smart Tailwind class merging** – automatically resolves style conflicts and simplifies working with dynamic classes. <br>
-🖼️ **Built-in SVG support with SVGR** – import SVGs as React components and style them dynamically. <br>
-📝 **Commitizen support** – makes writing commit messages easier and faster by guiding you through the process. <br>
-🔗 **Clean import rules** – alias-based imports keep your code clean and eliminate long relative paths. <br>
+**Files**
+- Drag-and-drop or multi-select upload, direct-to-storage (presigned URL — the file never
+  passes through this app's own server), with a per-file progress bar and a persistent
+  upload queue panel.
+- Name conflicts on upload/rename surface inline with a one-click "keep both" rename, not a
+  generic error toast.
+- Inline preview (PDF and images render in the browser; everything else downloads).
 
-Just grab it and start developing! 🚀
+**Search, filter, sort**
+- Debounced name search across the current folder's files and folders.
+- Filter files by type (PDF / images / documents / spreadsheets / other).
+- Sort by name or upload date, in either direction.
 
+**Sharing**
+- Share a data room, a folder, or a single file — recipients get read-only access,
+  including everything nested underneath.
+- Two modes: a public link (anyone with the URL) or a permissioned list of grantee emails.
+  Either can be revoked at any time, and revocation takes effect immediately.
+- A "Shared with me" view for permissioned recipients, and an unauthenticated `/share/[token]`
+  browsing experience for public links.
 
+**Auth & polish**
+- Email/password auth. Dark and light themes, both first-class (not a dark theme with a
+  light one bolted on). Toasts on every mutation, skeleton loading states, empty states that
+  distinguish "genuinely empty" from "no results for this search," and a graceful
+  "no longer available" state everywhere a shared resource can vanish out from under a
+  viewer (revoked, deleted, moved).
 
-## 🛠️ Tech Stack
-- [Typescript](https://www.typescriptlang.org/)
-- [React](https://react.dev/)
-- [Next.js](https://nextjs.org/docs)
-- [Tailwind](https://tailwindcss.com/)
-- [TanStack Query](https://tanstack.com/query/)
-- [Zod](https://zod.dev/?id=basic-usage)
-- [Zustand](https://zustand.docs.pmnd.rs/getting-started/introduction)
-- [Axios](https://axios-http.com/docs/intro)
-- [React Hook Forms](https://react-hook-form.com/)
+## Tech stack
 
+- **Next.js 15** (App Router) + **React 19** + TypeScript
+- **Tailwind CSS** — the only styling mechanism; no component-level CSS files
+- **Radix UI primitives + shadcn/ui** (`new-york` style) for every interactive component
+- **TanStack Query** for server state; **Zustand** for the one piece of pure client state
+  (the upload queue)
+- **React Hook Form + Zod** for every form
+- **Axios**, with an interceptor that transparently refreshes an expired access token and
+  retries the original request (see [Auth](#auth-httponly-cookies-not-localstorage) below)
+- **next-themes** for the dark/light toggle
 
-## 📚 Getting Started
-### 1. Install dependencies:
+## Design system
+
+Colors, radii and spacing live as CSS custom properties in `src/app/styles/global.css`
+(colors stored as raw OKLCH components, e.g. `--background: 0.1 0 0`, so Tailwind's opacity
+modifiers like `bg-foreground/50` keep working) and are wired into `tailwind.config.ts`. Both
+themes are defined side by side — `:root` for light, `.dark` for dark — so neither is an
+afterthought. The visual target is understated and near-monochrome, closer to resend.com than
+a stock shadcn demo: thin low-opacity borders, generous whitespace, Geist Sans/Mono, a single
+restrained accent color.
+
+Every interactive control is a Radix primitive under `shared/ui/`, styled with Tailwind —
+never a hand-rolled `<div onClick>` standing in for a real button/dialog/select.
+
+## Architecture
+
+The `src/` folder follows **Feature-Sliced Design** (`app → widgets → features → entities →
+shared`), enforced at lint time by `eslint-plugin-boundaries` — an illegal cross-layer import
+fails `npm run lint`, not just code review. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the
+full layer-by-layer breakdown, code examples, and the "why" behind the harder rules (no barrel
+files, generator-only `entities`/`features`, `env.ts`-only `process.env` access, and so on).
+[`CLAUDE.md`](./CLAUDE.md) holds the condensed, authoritative rule list.
+
+```
+src/
+├── app/        # Routing, layouts, pages — Server Components only, no business logic
+├── widgets/    # Page-level compositions (e.g. the folder browser: breadcrumbs + toolbar +
+│               #   file/folder list + every dialog it can open)
+├── features/   # A user-facing capability: upload, share, rename, delete, auth forms…
+├── entities/   # API access only — one folder per REST resource (api/hooks/types), no UI
+└── shared/     # Design tokens, shadcn/Radix primitives, axios client, Zustand stores,
+                #   framework-agnostic hooks — feature-agnostic, importable from anywhere
+```
+
+### Auth: httpOnly cookies, not localStorage
+
+The access and refresh tokens are **httpOnly cookies set by the backend** — this app never
+reads, writes, or stores the token itself (no `localStorage`, no client-readable cookie), so
+there's nothing for an XSS payload to steal. `shared/lib/axios.ts` just sets
+`withCredentials: true` and lets the browser attach the cookie automatically.
+
+The access token is short-lived (15 min); the refresh token is long-lived (30 days) and
+scoped to the refresh endpoint's own path, so it never rides along on ordinary API calls. When
+a request comes back `401`, the axios response interceptor transparently calls
+`/auth/refresh`, retries the original request once, and only surfaces the error if the refresh
+itself fails — a user's session survives an expired access token without them noticing.
+
+One consequence worth calling out: because the frontend and backend are (and in production
+will be) different origins, a cookie the backend sets is **not visible to this app's own
+Next.js server** — middleware can't read it. Route protection therefore happens client-side,
+via `widgets/auth-guard`, which gates both directions (`require-auth` on the app layout,
+`require-guest` on the login/register layout) off a live `/auth/me` call rather than off
+cookie presence. This is deliberate, not an oversight — it's the one approach that behaves
+identically in local dev and in a real cross-domain deployment.
+
+### Data fetching
+
+Every list endpoint (data rooms, folders, files, shares) is paginated, and the frontend never
+requests an unbounded list. Search/filter/sort state lives in the page component and is
+threaded straight into the TanStack Query params object, which is also the query key — so
+changing a filter is just a normal cache-keyed refetch, with no separate client-side filtering
+pass. Search input is debounced (300ms) before it hits the network. Pagination, filtering and
+sorting are enforced server-side for exactly this reason: they need to stay correct however
+large a single data room's contents get, not just while there are a handful of test files in
+it.
+
+## Getting started
+
 ```bash
-yarn install
+npm install
+cp .env.example .env.local   # then point NEXT_PUBLIC_API_URL at your running backend
+npm run dev
 ```
-### 2. Create a .env file:
-```bash
-cp .env.example .env
-```
-### 3. Run the development server:
-```bash
-yarn dev
-```
-</br>
-You will have server running at:
-- App - http://localhost:3000
 
+The app runs at **http://localhost:3000**. It expects `data-room-api` to already be running
+(see that repo's own README) — this app has no backend of its own.
 
+### Environment variables
 
-## 📁 Project structure
-```
-├── public/
-|     └── icons/                # Stores static assets like app icons (SVG files, etc.)
-└── src/
-    ├── app/                    # Contains the core application logic and structure
-    |    ├── layout.tsx
-    |    ├── page.tsx
-    |    └── styles/            # Global application styles (CSS/SCSS)
-    |          └── global.css   # Global styles applied across the app
-    ├── widgets/                # Compositions of several features into a page-level block
-    ├── entities/                # <entity>/{api,types,hooks} — API access only, no UI
-    ├── features/                # <feature>/{ui,hooks,schemas,lib,types}
-    ├── shared/
-    |      ├── constants/       # App-wide constants (e.g., enums, configuration values)
-    |      ├── providers/       # Context providers and dependency injection
-    |      ├── store/           # State management (e.g., Redux, Zustand)
-    |      ├── hooks/           # Reusable React hooks
-    |      ├── icons/           # Stores dynamic app icons (could be React components)
-    |      ├── types/           # Shared TypeScript types and interfaces
-    |      ├── lib/             # Utility functions and reusable helper libraries
-    |      └── ui/              # UI components shared across the app
-    └── env.ts                  # Configuration and validation of environment variables
-```
-📖 See [Feature-Sliced Design](#-feature-sliced-design-fsd) below for what belongs in each
-folder and how imports between them are allowed to flow.
+| Variable | Required | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | yes | Base URL of the backend API, including its `/api` prefix (e.g. `http://localhost:3001/api`). Validated at build time via `src/env.ts` — a missing/invalid value fails the build loudly instead of at runtime. |
 
+### Scripts
 
-
-## 🧱 Feature-Sliced Design (FSD)
-This template's `src/` folder follows [Feature-Sliced Design](https://feature-sliced.design/),
-an architecture methodology that organizes code by **layers** (how close a piece of code is
-to a concrete screen) instead of by technical role (`components/`, `hooks/`, `utils/`).
-Read the [official docs](https://feature-sliced.design/docs) for the full methodology — this
-section covers only how it's applied here.
-
-### Layers, top to bottom
-```
-app → widgets → features → entities → shared
-```
-A layer may only import from **itself** and from layers **strictly below** it. `shared` is
-the only layer with no import restrictions of its own — but it may never import from
-`entities`, `features`, `widgets` or `app`. This is enforced automatically by
-`eslint-plugin-boundaries` (`boundaries/dependencies` rule in `.eslintrc.js`) — an illegal
-import (e.g. `entities` importing from `features`) fails `yarn lint`.
-
-| Folder | What goes here |
+| Command | What it does |
 | --- | --- |
-| `src/app/` | Routing, layouts, pages, global styles. **Server Components only** — no hooks, no `'use client'`, no business logic. Composes `widgets`/`features` and prefetches their data. |
-| `src/widgets/` | Compositions of several `features` (and `entities`) into one page-level block (e.g. a page header combining search + nav + user menu). Optional layer — small apps may not need it. |
-| `src/features/` | A user-facing capability and the UI/logic behind it: `ui/` (components, `'use client'` on the leaves that need it), `hooks/`, `schemas/` (Zod), `lib/` (feature-local helpers), `types/`. Scaffolded only via `yarn generate:feature <name>`. |
-| `src/entities/` | The API access layer, one folder per route prefix (`/users` → `entities/users/`): `api/` (axios requests), `types/` (params, payloads, responses), `hooks/` (TanStack Query hooks). **No UI, no business logic.** Scaffolded only via `yarn generate:entity <name>`. |
-| `src/shared/` | Everything global and feature-agnostic, with **no slices** — just segments: `ui/` (reusable components), `lib/` (utils + configured library instances like `axios`, `queryClient`, `cn`), `hooks/` (global hooks, not tied to any API call), `store/` (all Zustand stores), `providers/` (all React context providers, mounted in `app/layout.tsx`), `constants/` (incl. the `QueryKeys` enum), `types/` (shared types), `icons/` (custom SVG icons imported as React components). **No `api/` segment** — every API call belongs to an `entities/<entity>`, even a one-off endpoint; see [🚫 No `shared/api`](#-no-sharedapi-every-api-call-is-an-entity) below. |
+| `npm run dev` | Start the dev server |
+| `npm run build` / `npm run start` | Production build / serve it |
+| `npm run lint:fix` | ESLint, including the FSD boundary and naming rules — run this and `typescript` before considering any change done |
+| `npm run typescript` | `tsc --noEmit` |
+| `npm run generate:entity <name>` / `generate:feature <name>` | Scaffold a new entity/feature — the only sanctioned way to create one, see `CLAUDE.md` |
 
-### 🚫 No layer-wide barrels
-**No layer root and no `shared` segment root has an `index.ts` that re-exports its
-contents** — `src/app/`, `src/widgets/`, `src/features/`, `src/entities/`, `src/shared/`
-and `src/shared/<segment>/` stay barrel-free:
-```typescript
-// ✅ Good
-import { useGetTodos } from 'entities/todos/hooks/get';
-import { cn } from 'shared/lib/styles';
+## Security notes
 
-// ❌ Forbidden — shared/lib/index.ts, features/index.ts
-import { cn } from 'shared/lib';
-import { CreateTodoForm } from 'features';
-```
-A layer-wide barrel defeats Next.js/webpack tree-shaking (importing one symbol pulls in the
-whole layer's graph), slows down cold builds and HMR, and hides where a symbol actually
-lives. It is blocked by ESLint's `no-restricted-syntax` (an override scoped to exactly those
-files rejects `export * from '...'` and `export { x } from '...'`), and the layer-root ones
-are additionally rejected by `boundaries/no-unknown-files`.
+- **httpOnly cookie auth** with a short-lived access token + silent refresh (see above) — no
+  token ever touches `localStorage` or JS-readable storage.
+- **Security headers** (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`) are set on every response via
+  `next.config.mjs`.
+- **`next/image` is unused and disabled** (`images.unoptimized: true`). The app never renders
+  a remote or user-supplied image through Next's optimizer, so the sharp-backed optimization
+  pipeline — including its own CVEs — has no reachable entry point.
+- File type safety (rejecting anything that isn't a PDF/image/office-document type, and
+  forcing a download instead of an inline render for anything not explicitly known-safe) is
+  enforced **server-side** in `data-room-api`, since that's the only place it can't be
+  bypassed by a modified client.
+- Known accepted risk: `npm audit` still flags a handful of high-severity advisories that
+  trace back to `next`'s own transitive `postcss`/`sharp` dependencies; a full fix requires
+  Next 16, a second major upgrade beyond the Next 15 migration already done here. Practical
+  exposure is low — `sharp`'s attack surface is the disabled image optimizer above, and
+  `postcss` only ever processes this project's own trusted CSS at build time, never
+  user-supplied input — but it's a deliberate, documented trade-off rather than a gap nobody
+  noticed.
 
-**A slice barrel is allowed**: a single `index.ts` on a slice root, re-exporting that
-slice's public API:
-```typescript
-// features/members/index.ts
-export { RemoveMemberButton } from './ui/remove-member-button';
-export { RemoveMemberDialog } from './ui/remove-member-dialog';
-```
-```typescript
-// ✅ Good — one slice, one barrel
-import { RemoveMemberButton } from 'features/members';
-```
-It stays inside the boundaries model: `.eslintrc.js` classifies `<layer>/<slice>/index.ts`
-as that slice, so it may only re-export files from its own slice and importers still obey
-the layer order. The generators don't create one — add it by hand if the slice needs it.
+## A note on AI usage
 
-### 🚫 No `shared/api` — every API call is an entity
-There is no "misc API calls that don't belong to a feature" escape hatch. Any code that
-calls `api.get/post/put/patch/delete` lives in `entities/<entity>/api/`, generated by
-`yarn generate:entity <name>` — even for a single one-off endpoint. `shared/hooks/` is for
-hooks that don't touch the network (`useDebounce`, `useMediaQuery`, …); a hook that wraps a
-TanStack Query call belongs in `entities/<entity>/hooks/` instead.
+This project was built with [Claude Code](https://claude.com/claude-code) writing the
+implementation, under my direction throughout. I set the scope from the take-home brief,
+reviewed and approved the phased build plan before any code was written, and made the call on
+every consequential decision along the way: the auth model (email/password, later reworked to
+short-lived access + refresh tokens in httpOnly cookies after I flagged the original token
+storage as insufficient), file storage (Cloudflare R2), hosting targets, the design direction
+(centralized token system, dark/light themes as first-class, Tailwind + Radix + shadcn, a
+Resend-inspired look), the switch to UUID primary keys, and the search/filter/sort feature. I
+also asked for a dedicated security and code-quality pass partway through specifically because
+I wanted a second look at the codebase before treating it as submission-ready — that pass
+surfaced and fixed several real issues (an unrestricted file-upload MIME type that could have
+let stored HTML execute via the preview iframe, no rate limiting on the auth endpoints, a
+Next.js version with unpatched CVEs, a Docker image running as root and shipping
+`devDependencies`, among others).
 
-### 🔒 The `src/` folder structure is locked down — even inside a slice
-Every file under `src/` must belong to one of the folders documented above, and each layer
-is scoped to its *specific* segments — not just "anything under this layer":
-- `widgets/*/(ui|hooks|lib|types)/**`
-- `features/*/(ui|hooks|schemas|lib|types)/**`
-- `entities/*/(api|hooks|types)/**`
-- `shared/(ui|types|store|providers|lib|icons|hooks|constants)/**`
-
-So there's no `src/utils/`, no `src/shared/api/` — but also no `entities/todos/ui/`
-(entities have no UI), no `features/todos/store/`, no `widgets/nav/random/`. This isn't just
-a convention: `eslint-plugin-boundaries`'s `boundaries/no-unknown-files` rule fails
-`yarn lint` on any file that doesn't match one of the patterns above, however plausible the
-folder name looks. If a new kind of code doesn't fit an existing segment, extend
-`boundaries/elements` in `.eslintrc.js` on purpose — don't add a folder it doesn't know
-about.
-
-### 🔐 `process.env` only in `src/env.ts`
-`process.env.SOMETHING` anywhere outside `src/env.ts` fails lint with ESLint's
-`no-restricted-properties` rule. Add the variable to the Zod schema in `env.ts` (see
-[⚙️ Typed Environment Configuration](#️-typed-environment-configuration-with-example) below)
-and import the validated `env` object everywhere else:
-```typescript
-// ✅ Good
-import { env } from 'env';
-const apiUrl = env.NEXT_PUBLIC_API_URL;
-
-// ❌ Fails lint anywhere except src/env.ts
-const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-```
-
-### 🔤 Naming — kebab-case for files and folders
-Every file and folder in `src/` is **kebab-case**: `create-todo-form.tsx`,
-`entities/todos/`, `features/todos/ui/create-todo-form/`. Never `CreateTodoForm.tsx`,
-`todos_list.ts`, or `entities/Todos/`.
-
-The one exception is `src/app/**`, which follows **Next.js App Router's own** naming
-instead — dynamic segments (`[id]`), route groups (`(marketing)`), parallel routes
-(`@modal`), and the fixed special filenames (`page.tsx`, `layout.tsx`, `route.ts`, …) don't
-fit plain kebab-case, and don't need to.
-
-Enforced by `eslint-plugin-check-file`:
-```
-✅ src/features/todos/ui/create-todo-form/create-todo-form.tsx
-❌ src/features/todos/ui/CreateTodoForm/createTodoForm.tsx   — fails yarn lint
-```
-
-## 🤖 Claude Code agents & commands
-This repo ships a `.claude/` folder with Claude Code agents and slash commands tuned to this
-template's FSD/Next.js conventions (the same rules documented in `CLAUDE.md`), so anyone using
-Claude Code in this repo gets them automatically — no setup required.
-
-| Path | What it does |
-| --- | --- |
-| `.claude/commands/pr-review.md` (`/pr-review`) | Orchestrated PR review: runs the two agents below in parallel against a PR (or the local branch diff), merges their findings, and publishes one review. |
-| `.claude/agents/pr-review/pr-architecture-reviewer.md` | Checks a diff against this repo's own architecture rules, read live from `CLAUDE.md` (Server/Client components, generator-only `entities`/`features`, no barrel files, layer boundaries, `env.ts`, Zod, `QueryKeys`, Tailwind-only styling, kebab-case). |
-| `.claude/agents/pr-review/pr-functional-reviewer.md` | Verifies a PR actually implements its ticket and hunts for logic bugs on the real code path (query-key mismatches, stale query-cache data, unhandled loading/error states). |
-| `.claude/agents/code-reviewer.md` | General quality/maintainability review for a diff. No test-coverage checks — this project has no test suite. |
-| `.claude/agents/security-auditor.md` | Frontend-focused security review: XSS, `NEXT_PUBLIC_*` env leakage, CSP/security headers, client-side token handling. |
-| `.claude/agents/ai-engineer.md` | LLM/RAG integration specialist for AI-powered feature work. |
-
-These are **not** a substitute for `yarn lint:fix && yarn typescript` — they catch things lint
-can't (architectural intent, ticket coverage, logic bugs), while ESLint/TypeScript remain the
-hard gate for everything mechanical.
-
-## Guidelines
-### 📝 Commits format
-Commitlint is used to check if your commit messages meet the [conventional commit format](https://www.conventionalcommits.org/en/v1.0.0/). This format helps create a consistent, structured commit history, making it easier to understand the project’s development over time, automate changelog generation, and manage versioning.
-The commit message format follows the pattern:
-```
-type(scope?): subject
-```
-#### Breakdown of Each Part:
-- **type**: The type of change being made. It should be one of the defined commit types (see below).
-- **scope** *(optional)*: A small context or part of the project that is being affected by the commit (e.g., `api`, `ui`, `auth`). This is optional but helps to narrow down the area of change.
-- **subject**: A short and concise description of what the commit does.
-#### Real world examples can look like this:
-```
-chore: run tests on travis ci
-```
-```
-fix(stepper): update button actions
-```
-```
-feat(passenger): add comment section
-```
-Common types according to [commitlint-config-conventional](https://github.com/conventional-changelog/commitlint/tree/master/@commitlint/config-conventional#type-enum) can be:
-* **build**: Changes related to the build system or external dependencies.
-* **ci**: Updates to the continuous integration configuration or scripts.
-* **chore**: Routine tasks, maintenance, or general updates.
-* **docs**: Changes to documentation.
-* **feat**: Introduces a new feature for the user or customer.
-* **fix**: Resolves a bug or fixes an issue.
-* **perf**: Improvements related to performance.
-* **refactor**: Code restructuring that does not change its external behavior.
-* **revert**: Reverts a previous commit.
-* **style**: Changes that do not affect the code's logic (e.g., formatting).
-* **test**: Adds or modifies tests.
-#### Use Commitizen to Commit
-Once you’ve installed all the required libraries, run ```yarn install```. After everything is set up, when you run ```git commit```, Commitizen will automatically trigger and ask you to choose the type of commit, enter a scope (if applicable), and provide a subject for your commit.
-</br>
-To start the commit redactor, simply run:
-```
-git add .
-git commit
-```
-#### What Happens During the Commit Process:
-- **Commit Type**: You will be prompted to select the type of change (e.g., feat, fix, chore, etc.).
-- **Scope** (optional): You will be asked to provide a scope (e.g., auth, ui, etc.).
-- **Subject**: Finally, you'll be asked to enter a short description of what the commit does.
-
-<br>
-
-### 🌍🖼️ Nextjs External Images
-Next.js has built-in support for optimizing images using the next/image component. However, by default, Next.js blocks external images unless explicitly allowed. This guide explains how to configure Next.js to permit images from external domains.
-#### Configuration
-To enable images from external sources, modify your ```next.config.mjs``` file and add the ```images``` configuration with ```remotePatterns```.
-#### Steps:
-1. Open your Next.js project.
-2. Locate the next.config.mjs file (or create one if it doesn't exist).
-3. Add or modify the images configuration to allow remote sources.
-#### Example Configuration
-```
-const nextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
-        pathname: '/v0/b/**',
-      },
-    ],
-  },
-  ...
-};
-```
-#### Explanation
-* ```images.remotePatterns``` defines an array of allowed remote image sources.
-* Each entry consists of:
-    * **protocol**: Allowed protocol (e.g., ```https```).
-    * **hostname**: External domain where images are hosted.
-    * **pathname**: Path pattern for image URLs.
-#### Usage Example
-Once configured, you can use external images with the ```next/image``` component:
-```
-<Image
-  src="https://firebasestorage.googleapis.com/v0/b/example-bucket/o/image.jpg"
-  width={500}
-  height={300}
-  alt="Example Image"
-/>
-```
-#### Troubleshooting
-* If images do not load, ensure the domain is correctly added in ```remotePatterns```.
-* If running locally, restart the Next.js server after modifying ```next.config.mjs```.
-
-<br>
-
-### 🖼️ Using SVGs
-Our template supports using SVGs as React components with SVGR.
-#### 🚀 Using SVG as React Components
-You can store SVG icons inside the ```shared/icons``` folder and import them as components.
-##### 📁 Folder Structure
-```
-├── src/
-|     └── shared/
-|           └── icons/
-|                 └──test-icon.svg
-```
-##### ✅ How to Use
-```
-import TestIcon from "shared/icons/test-icon.svg";
-
-const ExampleComponent = () => {
-  return (
-    <TestIcon width={50} height={50} color="red" />
-  );
-};
-
-export default ExampleComponent;
-```
-##### 📌 When to Use This
-* When you need to style SVGs with Tailwind or props (```width```, ```color```, ```fill```).
-* When using SVGs as inline components in React.
-* When you want flexibility with dynamic styling.
-
-This setup ensures flexibility, allowing you to choose the best method depending on your use case. 🚀
-
-<br>
-
-### 🎨 Styling — Tailwind only, no custom CSS
-This template styles **exclusively with Tailwind utility classes**. There is no other
-stylesheet to fall back to: the only CSS file in `src/` is `src/app/styles/global.css`
-(the `@tailwind` directives, plus — if you add a library like shadcn/ui — its theme CSS
-variables in `@layer base`). No `*.css`, `*.module.css`, `*.scss` file anywhere else.
-
-This is enforced by ESLint's `no-restricted-imports` rule in `.eslintrc.js`: importing any
-local stylesheet other than `app/styles/global.css` fails `yarn lint`.
-```typescript
-// ✅ Good — Tailwind classes, merged with cn()
-<button className={cn('rounded px-4 py-2', primary && 'bg-blue-500')}>Click me</button>
-
-// ❌ Fails lint — no local stylesheets besides app/styles/global.css
-import './button.css';
-import styles from './button.module.css';
-```
-**Need a reusable value** (a brand color, a spacing scale, a custom breakpoint, a font)?
-Add it to **`tailwind.config.ts`** (`theme.extend`) and use it as a utility class —
-don't hand-write a CSS class for it:
-```typescript
-// tailwind.config.ts
-theme: {
-  extend: {
-    colors: { brand: '#1a73e8' },
-  },
-},
-```
-```tsx
-// ✅ Good
-<div className="bg-brand" />
-
-// ❌ Don't recreate this as a hand-written CSS class
-```
-**A UI library ships its own stylesheet** (Swiper, react-day-picker, …)? Import it directly
-from the package — never copy it into `src/`:
-```typescript
-// ✅ Good — imported straight from node_modules, not duplicated in src/
-import 'swiper/css';
-```
-
-<br>
-
-### 🖌️ Tailwind CSS Class Merging Guide
-When working with dynamic classes in Tailwind CSS, class merging helps avoid conflicts and simplifies styling. We use ```clsx``` and ```tailwind-merge``` to efficiently combine classes, ensuring cleaner and more maintainable code.
-
-#### Example
-##### ❌ Without Merging Classes
-```
-const Button = ({ primary, disabled }: { primary: boolean, disabled: boolean }) => {
-  return (
-    <button className={`px-4 py-2 ${primary ? 'bg-blue-500' : 'bg-gray-500'} ${disabled ? 'bg-gray-300 cursor-not-allowed' : 'hover:bg-opacity-80'}`}>
-      Click me
-    </button>
-  );
-};
-```
-
-##### ✅ With Class Merging
-
-```
-const Button = ({ primary, disabled }: { primary: boolean, disabled: boolean }) => {
-  return (
-    <button className={cn(
-      'px-4 py-2 rounded-lg text-white',
-      primary ? 'bg-blue-500' : 'bg-gray-500',
-      disabled && 'bg-gray-300 cursor-not-allowed',
-      !disabled && 'hover:bg-opacity-80'
-    )}>
-      Click me
-    </button>
-  );
-};
-```
-
-<br>
-
-### ⚙️ Typed Environment Configuration with Example
-This setup uses typed environment variables to validate configuration, reducing runtime errors by ensuring all required variables are provided and preventing issues with non-existent variables.
-
-**Example:**
-```
-import { createEnv } from '@t3-oss/env-nextjs';
-import { z } from 'zod';
-
-const env = createEnv({
-  client: {
-    // Client-side variables must be prefixed with NEXT_PUBLIC_ to be exposed to the browser
-    NEXT_PUBLIC_API_URL: z.string(),
-    NEXT_PUBLIC_NODE_ENV: z.enum(['production', 'development', 'test']),
-  },
-  server: {
-    NEXT_AUTH_SESSION_EXPIRED: z.string(),
-  },
-  runtimeEnv: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    NEXT_PUBLIC_NODE_ENV: process.env.NEXT_PUBLIC_NODE_ENV,
-    NEXT_AUTH_SESSION_EXPIRED: process.env.NEXT_AUTH_SESSION_EXPIRED,
-  },
-});
-
-export { env };
-```
-
-**Example of how to access an environment variable**
-```
-const apiUrl = env.NEXT_PUBLIC_API_URL; // Access client-side variable
-const sessionExpired = env.NEXT_AUTH_SESSION_EXPIRED; // Access server-side variable
-```
-
-<br>
-
-### 🔗 Properly Using Import Aliases in Your Project
-Thanks to `baseUrl: "./src"` in `tsconfig.json`, every folder under `src/` can be imported
-by its path instead of a long relative one — no extra alias configuration needed.
-
-**Basic Import:** import the exact file that declares what you need:
-```
-import { useGetUsers } from 'entities/users/hooks/get';
-import { LoginButton } from 'features/auth/ui/login-button/login-button';
-import { fetchData } from 'shared/lib/fetch-data';
-```
-**Import the Concrete File — the only barrel is a slice barrel:** layer roots and `shared`
-segments never have an `index.ts` (see
-[🚫 No layer-wide barrels](#-no-layer-wide-barrels)), so an import resolves to a real file —
-or, at most, to a slice that chose to expose one:
-```
-// ✅ Good: import the file that declares the symbol
-import { LoginForm } from 'features/auth/ui/login-form/login-form';
-
-// ✅ Also fine, if features/auth/index.ts exists
-import { LoginForm } from 'features/auth';
-
-// ❌ Forbidden: features/index.ts, shared/ui/index.ts
-import { LoginForm } from 'features';
-```
-Instead of writing a long relative path like ```../../../shared/ui/button/button```, use the
-absolute one — ```shared/ui/button/button``` — from anywhere in the project. This keeps
-imports short and explicit without hiding behind a barrel.
-
-Which layer is allowed to import which is enforced by `eslint-plugin-boundaries`
-(`boundaries/dependencies` in `.eslintrc.js`) — see
-[🧱 Feature-Sliced Design](#-feature-sliced-design-fsd) above for the allowed layer order.
+AI wrote the code against that direction — components, API routes, schema, tests. Feature
+verification was automated throughout: every flow (golden path, edge cases like same-name
+uploads and deleting something a share recipient is currently viewing, sharing, the
+refresh-token behavior, responsive layout) was driven through a real Chromium browser via
+Playwright before being called done, rather than trusting `lint`/`typescript` alone.

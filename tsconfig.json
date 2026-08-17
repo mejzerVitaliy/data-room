@@ -6,7 +6,9 @@
       "esnext"
     ],
     "paths": {
-      "entities/*": ["entities/*"]
+      "entities/*": [
+        "entities/*"
+      ]
     },
     "baseUrl": "./src",
     "allowJs": true,
@@ -25,7 +27,8 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "target": "ES2017"
   },
   "include": [
     "svgr.d.ts",

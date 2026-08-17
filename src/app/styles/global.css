@@ -3,7 +3,88 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --background: 1 0 0;
+    --foreground: 0.145 0 0;
+
+    --card: 1 0 0;
+    --card-foreground: 0.145 0 0;
+
+    --popover: 1 0 0;
+    --popover-foreground: 0.145 0 0;
+
+    --primary: 0.205 0 0;
+    --primary-foreground: 0.985 0 0;
+
+    --secondary: 0.97 0 0;
+    --secondary-foreground: 0.205 0 0;
+
+    --muted: 0.97 0 0;
+    --muted-foreground: 0.505 0 0;
+
+    --accent: 0.97 0 0;
+    --accent-foreground: 0.205 0 0;
+
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+
+    --success: 0.6 0.15 145;
+    --success-foreground: 0.985 0 0;
+
+    --border: 0.9 0 0;
+    --input: 0.9 0 0;
+    --ring: 0.708 0 0;
+
+    --brand: 0.52 0.22 280;
+    --brand-foreground: 0.985 0 0;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 0.1 0 0;
+    --foreground: 0.97 0 0;
+
+    --card: 0.145 0 0;
+    --card-foreground: 0.97 0 0;
+
+    --popover: 0.155 0 0;
+    --popover-foreground: 0.97 0 0;
+
+    --primary: 0.97 0 0;
+    --primary-foreground: 0.145 0 0;
+
+    --secondary: 0.21 0 0;
+    --secondary-foreground: 0.97 0 0;
+
+    --muted: 0.19 0 0;
+    --muted-foreground: 0.63 0 0;
+
+    --accent: 0.23 0 0;
+    --accent-foreground: 0.97 0 0;
+
+    --destructive: 0.65 0.23 25;
+    --destructive-foreground: 0.985 0 0;
+
+    --success: 0.68 0.16 145;
+    --success-foreground: 0.145 0 0;
+
+    --border: 0.22 0 0;
+    --input: 0.26 0 0;
+    --ring: 0.556 0 0;
+
+    --brand: 0.72 0.18 280;
+    --brand-foreground: 0.13 0 0;
+  }
+
+  * {
+    @apply border-border;
+  }
+
   body {
-    @apply bg-white;
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
   }
 }
