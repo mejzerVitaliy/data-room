@@ -5,7 +5,8 @@ diligence workflows — nested folders, drag-and-drop uploads, inline file previ
 read-only sharing via public links or permissioned invites.
 
 This is the **Next.js frontend**. It talks to a separate Fastify + PostgreSQL API
-([`data-room-api`](../data-room-api)) over REST; nothing here talks to a database directly.
+([`data-room-api`](https://github.com/mejzerVitaliy/data-room-api)) over REST; nothing here
+talks to a database directly.
 
 ## Features
 
